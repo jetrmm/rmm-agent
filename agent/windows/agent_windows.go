@@ -21,7 +21,6 @@ import (
 	"time"
 	"unsafe"
 
-	ps "github.com/jetrmm/go-sysinfo"
 	wapf "github.com/jetrmm/go-win64api"
 	rmm "github.com/jetrmm/rmm-agent/shared"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -161,25 +160,6 @@ func (a *windowsAgent) New(logger *logrus.Logger, version string, isAdmin bool) 
 			RClient: restyC,
 		},
 	}
-}
-
-// OSInfo returns formatted OS names
-func (a *windowsAgent) OSInfo() (plat, osFullName string) {
-	host, _ := ps.Host()
-	info := host.Info()
-	osInfo := info.OS
-
-	var arch string
-	switch info.Architecture {
-	case "x86_64":
-		arch = "64 bit"
-	case "x86":
-		arch = "32 bit"
-	}
-
-	plat = osInfo.Platform
-	osFullName = fmt.Sprintf("%s, %s (build %s)", osInfo.Name, arch, osInfo.Build)
-	return
 }
 
 // GetStorage returns a list of fixed disks
