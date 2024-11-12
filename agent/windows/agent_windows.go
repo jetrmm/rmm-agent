@@ -47,11 +47,17 @@ func init() {
 	agent.Register(windowsAgent{})
 }
 
+/*type windowsHost struct{}
+
+func (a windowsHost) Host(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent {
+	return NewAgent(logger, version, isAdmin)
+}*/
+
 type windowsAgent struct {
 	agent.Agent
 }
 
-func NewAgent(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent {
+func NewAgent(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
 	regKeys := WinRegKeys{
 		baseUrl:  "",
 		agentId:  "",
@@ -69,7 +75,7 @@ func NewAgent(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent 
 		regKeys, err := getRegKeys(logger)
 		if err != nil {
 			fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
-			logger.Debugln("Unable to retrieve registry keys (agent not installed?)")
+			logger.Errorln("Unable to retrieve registry keys (agent not installed?)")
 		} else {
 			if len(regKeys.token) > 0 {
 				headers["Content-Type"] = "application/json"
@@ -108,58 +114,7 @@ func NewAgent(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent 
 
 // New Initializes a new windowsAgent with logger
 func (a *windowsAgent) New(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
-	regKeys := WinRegKeys{
-		baseUrl:  "",
-		agentId:  "",
-		apiUrl:   "",
-		token:    "",
-		agentPK:  "",
-		pk:       0,
-		rootCert: "",
-	}
-
-	headers := make(map[string]string)
-	restyC := resty.New()
-
-	if isAdmin {
-		regKeys, err := getRegKeys(logger)
-		if err != nil {
-			fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
-			logger.Debugln("Unable to retrieve registry keys (agent not installed?)")
-		} else {
-			if len(regKeys.token) > 0 {
-				headers["Content-Type"] = "application/json"
-				headers["Authorization"] = fmt.Sprintf("Token %s", regKeys.token)
-			}
-			restyC.SetBaseURL(regKeys.baseUrl)
-			restyC.SetCloseConnection(true)
-			restyC.SetHeaders(headers)
-			restyC.SetTimeout(15 * time.Second)
-			restyC.SetDebug(logger.IsLevelEnabled(logrus.DebugLevel))
-			if len(regKeys.rootCert) > 0 {
-				restyC.SetRootCertificate(regKeys.rootCert)
-			}
-		}
-	}
-
-	return &windowsAgent{
-		Agent: agent.Agent{
-			AgentConfig: &agent.AgentConfig{
-				AgentID: regKeys.agentId,
-				BaseURL: regKeys.baseUrl,
-				ApiURL:  regKeys.apiUrl,
-				ApiPort: agent.NATS_DEFAULT_PORT,
-				Token:   regKeys.token,
-				AgentPK: regKeys.pk,
-				Cert:    regKeys.rootCert,
-				Version: version,
-				Debug:   logger.IsLevelEnabled(logrus.DebugLevel),
-				Headers: headers,
-			},
-			Logger:  logger,
-			RClient: restyC,
-		},
-	}
+	return NewAgent(logger, version, isAdmin)
 }
 
 // GetStorage returns a list of fixed disks

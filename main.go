@@ -108,7 +108,8 @@ func main() {
 
 	// was: var a = NewAgent(log, version).(agent.IAgent)
 	var a = NewAgent(log, version, isAdmin) // .(agent.IAgent)
-	// test: var a, _ = GetAgent(log, version)
+	// test: AgentProvider:
+	// var a, _ = GetAgent(log, version, isAdmin)
 
 	if len(os.Args) == 1 {
 		a.ShowStatus(version)
@@ -228,12 +229,12 @@ func main() {
 	}
 }
 
-/*func GetAgent(logger *logrus.Logger, version string) (*agent.Agent, error) {
-	provider := registry2.GetAgentProvider()
+/*func GetAgent(logger *logrus.Logger, version string, isAdmin bool) (agent.IAgent, error) {
+	provider := agent.GetAgentProvider()
 	if provider == nil {
 		return nil, fmt.Errorf("Unimplemented")
 	}
-	return provider.Agent(logger, version), nil
+	return provider.Host(logger, version, isAdmin), nil
 }*/
 
 func checkForAdmin() bool {
