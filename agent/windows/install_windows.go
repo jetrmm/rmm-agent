@@ -31,6 +31,7 @@ type WinRegKeys struct {
 	rootCert string
 }
 
+// Install the Agent
 func (a *windowsAgent) Install(i *agent.InstallInfo, agentID string) {
 	a.checkExistingAndRemove(i.Silent)
 
@@ -65,7 +66,7 @@ func (a *windowsAgent) Install(i *agent.InstallInfo, agentID string) {
 	a.Logger.Debugln("Agent API Endpoint:", i.ApiURL)
 
 	// todo: port 443 and/or 4222
-	terr := agent.TestTCP(fmt.Sprintf("%s:4222", i.ApiURL))
+	terr := agent.TestTCP(fmt.Sprintf("%s:%s", i.ApiURL, agent.NATS_DEFAULT_PORT))
 	if terr != nil {
 		a.installerMsg(fmt.Sprintf("ERROR: Either port %s TCP is not open on your RMM server, or the NATS service is not running.\n\n%s",
 			agent.NATS_DEFAULT_PORT, terr.Error()), "error", i.Silent)
@@ -144,9 +145,8 @@ func (a *windowsAgent) Install(i *agent.InstallInfo, agentID string) {
 	createRegKeys(baseURL, a.AgentID, i.ApiURL, authToken, strconv.Itoa(agentPK), i.RootCert)
 
 	// Refresh our agent with new values
-	a = a.New(a.Logger, a.Version, true)
-	// todo:
-	// a = NewAgent(a.Logger, a.Version)
+	// was: a = a.New(a.Logger, a.Version, true)
+	a = NewAgent(a.Logger, a.Version, true)
 
 	// Set new headers. No longer knox auth; use agent auth
 	rClient.SetHeaders(a.Headers)

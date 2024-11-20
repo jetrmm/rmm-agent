@@ -112,10 +112,10 @@ func NewAgent(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent
 	}
 }
 
-// New Initializes a new windowsAgent with logger
-func (a *windowsAgent) New(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
-	return NewAgent(logger, version, isAdmin)
-}
+// New Initializes a new windowsAgent with logger (only called from Install)
+// func (a *windowsAgent) New(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
+// 	return NewAgent(logger, version, isAdmin)
+// }
 
 // GetStorage returns a list of fixed disks
 func (a *windowsAgent) GetStorage() []jrmm.StorageDrive {

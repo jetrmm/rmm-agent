@@ -65,10 +65,12 @@ func main() {
 	inno := updateSet.String("inno", "", "Setup filename") // todo: Windows only
 	updateVer := updateSet.String("updatever", "", "Update version")
 
+	// Mode (legacy)
 	modeSet := flag.NewFlagSet("mode", flag.ContinueOnError)
 	mode := modeSet.String("m", "", "The mode to run: "+
 		"install, update, agentsvc, runchecks, checkrunner, sysinfo, software, \n\t\tsync, pk, publicip, taskrunner, cleanup")
 
+	// Task ID
 	taskPK := flag.Int("p", 0, "Task PK")
 
 	// Logging
@@ -78,14 +80,13 @@ func main() {
 	// Agent Service management
 	svcFlag := flag.String("service", "", "Control the system service.")
 
-	// flag.Parse()
+	flag.Parse()
 
 	// info, ok := debug.ReadBuildInfo()
 	// if !ok {
 	// 	fmt.Fprintln(os.Stderr, "build information not found")
 	// 	return
 	// }
-
 	// if *ver {
 	// 	printVersionInfo(info)
 	// 	return
@@ -99,15 +100,13 @@ func main() {
 	setupLogging(logLevel, logTo)
 	defer logFile.Close()
 
-	// fmt.Println(checkForAdmin())
-
 	var isAdmin = checkForAdmin()
 	if !isAdmin {
 		fmt.Println("Need to run using administrative privileges")
 	}
 
 	// was: var a = NewAgent(log, version).(agent.IAgent)
-	var a = NewAgent(log, version, isAdmin) // .(agent.IAgent)
+	var a = NewAgent(log, version, isAdmin)
 	// test: AgentProvider:
 	// var a, _ = GetAgent(log, version, isAdmin)
 
@@ -265,7 +264,10 @@ func setupLogging(level, to *string) {
 	} else {
 		switch runtime.GOOS {
 		case "windows":
-			logFile, _ = os.OpenFile(filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER, AGENT_LOG_FILE), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+			logFile, err = os.OpenFile(filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER, AGENT_LOG_FILE), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to open log file: %s\n", err)
+			}
 		case "freebsd":
 			logFile, _ = os.OpenFile(filepath.Join("/var/log", "rmm", AGENT_LOG_FILE), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0660)
 		case "darwin":
@@ -299,7 +301,7 @@ func updateUsage() {
 // showVersionInfo prints basic debugging info
 func showVersionInfo(ver string) {
 	fmt.Println(agent.AGENT_NAME_LONG, ver, runtime.GOARCH, runtime.Version())
-	// if runtime.GOOS == "windows" {
-	// 	fmt.Println("Program Directory: ", filepath.Join(os.Getenv("ProgramFiles"), agent.AGENT_FOLDER))
-	// }
+	if runtime.GOOS == "windows" {
+		fmt.Println("Program Directory: ", filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER))
+	}
 }
