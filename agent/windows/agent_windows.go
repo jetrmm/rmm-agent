@@ -12,9 +12,7 @@ import (
 	jrmm "github.com/jetrmm/rmm-shared"
 	"github.com/kardianos/service"
 	"math"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -27,7 +25,6 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -74,8 +71,8 @@ func NewAgent(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent
 	if isAdmin {
 		regKeys, err := getRegKeys(logger)
 		if err != nil {
-			fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
-			logger.Errorln("Unable to retrieve registry keys (agent not installed?)")
+			// fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
+			logger.Warningln("Unable to retrieve registry keys (agent not installed?)")
 		} else {
 			if len(regKeys.token) > 0 {
 				headers["Content-Type"] = "application/json"
@@ -410,15 +407,6 @@ func (a *windowsAgent) SendSoftware() {
 	}
 }
 
-func (a *windowsAgent) UninstallCleanup() {
-	err := registry.DeleteKey(registry.LOCAL_MACHINE, REG_RMM_PATH)
-	if err != nil {
-		return
-	}
-	a.CleanupAgentUpdates()
-	CleanupSchedTasks()
-}
-
 // ShowStatus prints the Windows service status
 // If called from an interactive desktop, pops up a message box
 // Otherwise prints to the console
@@ -454,101 +442,6 @@ func (a *windowsAgent) ShowStatus(version string) {
 		fmt.Println("Agent Version", version)
 		fmt.Println("Agent Service:", statusMap[SERVICE_NAME_AGENT])
 		// fmt.Println("RPC Service:", statusMap[SERVICE_NAME_RPC])
-	}
-}
-
-func (a *windowsAgent) AgentUpdate(url, inno, version string) {
-	time.Sleep(time.Duration(randRange(1, 15)) * time.Second)
-
-	a.CleanupAgentUpdates()
-
-	updater := filepath.Join(a.GetWorkingDir(), inno)
-	a.Logger.Infof("Agent updating from %s to %s", a.Version, version)
-	a.Logger.Infoln("Downloading agent update from", url)
-
-	rClient := resty.New()
-	rClient.SetCloseConnection(true)
-	rClient.SetTimeout(15 * time.Minute)
-	rClient.SetDebug(a.Debug)
-	r, err := rClient.R().SetOutput(updater).Get(url)
-	if err != nil {
-		a.Logger.Errorln(err)
-		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
-		return
-	}
-	if r.IsError() {
-		a.Logger.Errorln("Download failed with status code", r.StatusCode())
-		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
-		return
-	}
-
-	dir, err := os.MkdirTemp("", INNO_SETUP_DIR)
-	if err != nil {
-		a.Logger.Errorln("AgentUpdate unable to create temporary directory:", err)
-		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
-		return
-	}
-
-	innoLogFile := filepath.Join(dir, INNO_SETUP_LOGFILE)
-
-	args := []string{"/C", updater, "/VERYSILENT", fmt.Sprintf("/LOG=%s", innoLogFile)}
-	cmd := exec.Command("cmd.exe", args...)
-	cmd.SysProcAttr = &windows.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
-	}
-	cmd.Start()
-	time.Sleep(1 * time.Second)
-}
-
-func (a *windowsAgent) GetUninstallExe() string {
-	cderr := os.Chdir(a.GetWorkingDir())
-	if cderr == nil {
-		files, err := filepath.Glob("unins*.exe")
-		if err == nil {
-			for _, f := range files {
-				if strings.Contains(f, "001") {
-					return f
-				}
-			}
-		}
-	}
-	return "unins000.exe"
-}
-
-func (a *windowsAgent) AgentUninstall() {
-	agentUninst := filepath.Join(a.GetWorkingDir(), a.GetUninstallExe())
-	args := []string{"/C", agentUninst, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/FORCECLOSEAPPLICATIONS"}
-	cmd := exec.Command("cmd.exe", args...)
-	cmd.SysProcAttr = &windows.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
-	}
-	cmd.Start()
-}
-
-func (a *windowsAgent) CleanupAgentUpdates() {
-	cderr := os.Chdir(a.GetWorkingDir())
-	if cderr != nil {
-		a.Logger.Errorln(cderr)
-		return
-	}
-
-	files, err := filepath.Glob("winagent-v*.exe")
-	if err == nil {
-		for _, f := range files {
-			os.Remove(f)
-		}
-	}
-
-	cderr = os.Chdir(os.Getenv("TMP"))
-	if cderr != nil {
-		a.Logger.Errorln(cderr)
-		return
-	}
-	folders, err := filepath.Glob(RMM_SEARCH_PREFIX)
-	if err == nil {
-		for _, f := range folders {
-			os.RemoveAll(f)
-		}
 	}
 }
 
