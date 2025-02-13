@@ -1,8 +1,7 @@
 module github.com/jetrmm/rmm-agent
 
 go 1.21.3
-
-toolchain go1.22.1
+toolchain go1.22.5
 
 require (
 	github.com/go-ole/go-ole v1.3.0
@@ -16,7 +15,7 @@ require (
 	github.com/jetrmm/go-wmi v0.1.0
 	github.com/jetrmm/rmm-shared v0.0.0-20231026210319-d19a6850ab00
 	github.com/kardianos/service v1.2.2
-	github.com/nats-io/nats.go v1.38.0
+	github.com/nats-io/nats.go v1.39.0
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
