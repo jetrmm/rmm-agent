@@ -1,12 +1,12 @@
 module github.com/jetrmm/rmm-agent
 
 go 1.21.3
-toolchain go1.22.5
+toolchain go1.24.1
 
 require (
 	github.com/go-ole/go-ole v1.3.0
 	github.com/go-resty/resty/v2 v2.16.5
-	github.com/gonutz/w32/v2 v2.11.1
+	github.com/gonutz/w32/v2 v2.12.1
 	github.com/jetrmm/go-dpapi v0.1.0
 	github.com/jetrmm/go-sysinfo v0.1.1
 	github.com/jetrmm/go-taskmaster v0.1.0
