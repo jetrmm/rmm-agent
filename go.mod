@@ -18,7 +18,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
-	github.com/ugorji/go/codec v1.2.12
+	github.com/ugorji/go/codec v1.3.2
 	golang.org/x/sys v0.45.0
 )
 
