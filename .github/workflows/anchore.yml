@@ -36,13 +36,13 @@ jobs:
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag localbuild/testimage:latest
     - name: Run the Anchore Grype scan action
-      uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2
+      uses: anchore/scan-action@568b89d27fc18c60e56937bff480c91c772cd993
       id: scan
       with:
         image: "localbuild/testimage:latest"
         fail-build: true
         severity-cutoff: critical
     - name: Upload vulnerability report
-      uses: github/codeql-action/upload-sarif@v4.37.3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ steps.scan.outputs.sarif }}
