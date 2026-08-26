@@ -13,6 +13,7 @@ import (
 	rmm "github.com/jetrmm/rmm-agent/shared"
 )
 
+// RunTask Run a task based on ID
 func (a *windowsAgent) RunTask(id int) error {
 	data := rmm.AutomatedTask{}
 	url := fmt.Sprintf("/api/v3/%d/%s/taskrunner/", id, a.AgentID)
@@ -58,7 +59,7 @@ func (a *windowsAgent) RunTask(id int) error {
 	return nil
 }
 
-// CreateInternalTask creates predefined RMM agent internal tasks
+// CreateInternalTask creates a predefined RMM agent internal Scheduled Task
 func (a *windowsAgent) CreateInternalTask(name, args, repeat string, start int) (bool, error) {
 	conn, err := taskmaster.Connect()
 	if err != nil {

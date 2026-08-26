@@ -12,23 +12,19 @@ import (
 	jrmm "github.com/jetrmm/rmm-shared"
 	"github.com/kardianos/service"
 	"math"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 	"unsafe"
 
-	ps "github.com/jetrmm/go-sysinfo"
 	wapf "github.com/jetrmm/go-win64api"
 	rmm "github.com/jetrmm/rmm-agent/shared"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -48,11 +44,17 @@ func init() {
 	agent.Register(windowsAgent{})
 }
 
+/*type windowsHost struct{}
+
+func (a windowsHost) Host(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent {
+	return NewAgent(logger, version, isAdmin)
+}*/
+
 type windowsAgent struct {
 	agent.Agent
 }
 
-func NewAgent(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent {
+func NewAgent(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
 	regKeys := WinRegKeys{
 		baseUrl:  "",
 		agentId:  "",
@@ -69,8 +71,8 @@ func NewAgent(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent 
 	if isAdmin {
 		regKeys, err := getRegKeys(logger)
 		if err != nil {
-			fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
-			logger.Debugln("Unable to retrieve registry keys (agent not installed?)")
+			// fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
+			logger.Warningln("Unable to retrieve registry keys (agent not installed?)")
 		} else {
 			if len(regKeys.token) > 0 {
 				headers["Content-Type"] = "application/json"
@@ -107,80 +109,10 @@ func NewAgent(logger *logrus.Logger, version string, isAdmin bool) agent.IAgent 
 	}
 }
 
-// New Initializes a new windowsAgent with logger
-func (a *windowsAgent) New(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
-	regKeys := WinRegKeys{
-		baseUrl:  "",
-		agentId:  "",
-		apiUrl:   "",
-		token:    "",
-		agentPK:  "",
-		pk:       0,
-		rootCert: "",
-	}
-
-	headers := make(map[string]string)
-	restyC := resty.New()
-
-	if isAdmin {
-		regKeys, err := getRegKeys(logger)
-		if err != nil {
-			fmt.Println("Unable to retrieve registry keys (agent not installed?)", err)
-			logger.Debugln("Unable to retrieve registry keys (agent not installed?)")
-		} else {
-			if len(regKeys.token) > 0 {
-				headers["Content-Type"] = "application/json"
-				headers["Authorization"] = fmt.Sprintf("Token %s", regKeys.token)
-			}
-			restyC.SetBaseURL(regKeys.baseUrl)
-			restyC.SetCloseConnection(true)
-			restyC.SetHeaders(headers)
-			restyC.SetTimeout(15 * time.Second)
-			restyC.SetDebug(logger.IsLevelEnabled(logrus.DebugLevel))
-			if len(regKeys.rootCert) > 0 {
-				restyC.SetRootCertificate(regKeys.rootCert)
-			}
-		}
-	}
-
-	return &windowsAgent{
-		Agent: agent.Agent{
-			AgentConfig: &agent.AgentConfig{
-				AgentID: regKeys.agentId,
-				BaseURL: regKeys.baseUrl,
-				ApiURL:  regKeys.apiUrl,
-				ApiPort: agent.NATS_DEFAULT_PORT,
-				Token:   regKeys.token,
-				AgentPK: regKeys.pk,
-				Cert:    regKeys.rootCert,
-				Version: version,
-				Debug:   logger.IsLevelEnabled(logrus.DebugLevel),
-				Headers: headers,
-			},
-			Logger:  logger,
-			RClient: restyC,
-		},
-	}
-}
-
-// OSInfo returns formatted OS names
-func (a *windowsAgent) OSInfo() (plat, osFullName string) {
-	host, _ := ps.Host()
-	info := host.Info()
-	osInfo := info.OS
-
-	var arch string
-	switch info.Architecture {
-	case "x86_64":
-		arch = "64 bit"
-	case "x86":
-		arch = "32 bit"
-	}
-
-	plat = osInfo.Platform
-	osFullName = fmt.Sprintf("%s, %s (build %s)", osInfo.Name, arch, osInfo.Build)
-	return
-}
+// New Initializes a new windowsAgent with logger (only called from Install)
+// func (a *windowsAgent) New(logger *logrus.Logger, version string, isAdmin bool) *windowsAgent {
+// 	return NewAgent(logger, version, isAdmin)
+// }
 
 // GetStorage returns a list of fixed disks
 func (a *windowsAgent) GetStorage() []jrmm.StorageDrive {
@@ -475,15 +407,6 @@ func (a *windowsAgent) SendSoftware() {
 	}
 }
 
-func (a *windowsAgent) UninstallCleanup() {
-	err := registry.DeleteKey(registry.LOCAL_MACHINE, REG_RMM_PATH)
-	if err != nil {
-		return
-	}
-	a.CleanupAgentUpdates()
-	CleanupSchedTasks()
-}
-
 // ShowStatus prints the Windows service status
 // If called from an interactive desktop, pops up a message box
 // Otherwise prints to the console
@@ -519,101 +442,6 @@ func (a *windowsAgent) ShowStatus(version string) {
 		fmt.Println("Agent Version", version)
 		fmt.Println("Agent Service:", statusMap[SERVICE_NAME_AGENT])
 		// fmt.Println("RPC Service:", statusMap[SERVICE_NAME_RPC])
-	}
-}
-
-func (a *windowsAgent) AgentUpdate(url, inno, version string) {
-	time.Sleep(time.Duration(randRange(1, 15)) * time.Second)
-
-	a.CleanupAgentUpdates()
-
-	updater := filepath.Join(a.GetWorkingDir(), inno)
-	a.Logger.Infof("Agent updating from %s to %s", a.Version, version)
-	a.Logger.Infoln("Downloading agent update from", url)
-
-	rClient := resty.New()
-	rClient.SetCloseConnection(true)
-	rClient.SetTimeout(15 * time.Minute)
-	rClient.SetDebug(a.Debug)
-	r, err := rClient.R().SetOutput(updater).Get(url)
-	if err != nil {
-		a.Logger.Errorln(err)
-		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
-		return
-	}
-	if r.IsError() {
-		a.Logger.Errorln("Download failed with status code", r.StatusCode())
-		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
-		return
-	}
-
-	dir, err := os.MkdirTemp("", INNO_SETUP_DIR)
-	if err != nil {
-		a.Logger.Errorln("AgentUpdate unable to create temporary directory:", err)
-		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
-		return
-	}
-
-	innoLogFile := filepath.Join(dir, INNO_SETUP_LOGFILE)
-
-	args := []string{"/C", updater, "/VERYSILENT", fmt.Sprintf("/LOG=%s", innoLogFile)}
-	cmd := exec.Command("cmd.exe", args...)
-	cmd.SysProcAttr = &windows.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
-	}
-	cmd.Start()
-	time.Sleep(1 * time.Second)
-}
-
-func (a *windowsAgent) GetUninstallExe() string {
-	cderr := os.Chdir(a.GetWorkingDir())
-	if cderr == nil {
-		files, err := filepath.Glob("unins*.exe")
-		if err == nil {
-			for _, f := range files {
-				if strings.Contains(f, "001") {
-					return f
-				}
-			}
-		}
-	}
-	return "unins000.exe"
-}
-
-func (a *windowsAgent) AgentUninstall() {
-	agentUninst := filepath.Join(a.GetWorkingDir(), a.GetUninstallExe())
-	args := []string{"/C", agentUninst, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/FORCECLOSEAPPLICATIONS"}
-	cmd := exec.Command("cmd.exe", args...)
-	cmd.SysProcAttr = &windows.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
-	}
-	cmd.Start()
-}
-
-func (a *windowsAgent) CleanupAgentUpdates() {
-	cderr := os.Chdir(a.GetWorkingDir())
-	if cderr != nil {
-		a.Logger.Errorln(cderr)
-		return
-	}
-
-	files, err := filepath.Glob("winagent-v*.exe")
-	if err == nil {
-		for _, f := range files {
-			os.Remove(f)
-		}
-	}
-
-	cderr = os.Chdir(os.Getenv("TMP"))
-	if cderr != nil {
-		a.Logger.Errorln(cderr)
-		return
-	}
-	folders, err := filepath.Glob(RMM_SEARCH_PREFIX)
-	if err == nil {
-		for _, f := range folders {
-			os.RemoveAll(f)
-		}
 	}
 }
 

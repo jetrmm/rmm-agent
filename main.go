@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 var (
@@ -47,28 +48,34 @@ func main() {
 
 	// CLI
 	ver := flag.Bool("version", false, "Prints agent version and exits")
+	// debug := flag.Bool("debug", false, "Debug mode")
 
 	// Install
-	installSet := flag.NewFlagSet("install", flag.ContinueOnError)
+	installSet := flag.NewFlagSet("install", flag.ExitOnError)
 	silent := installSet.Bool("silent", false, "Do not popup any message boxes during installation")
 	apiUrl := installSet.String("api", "", "API URL")
 	clientID := installSet.Int("client-id", 0, "Client ID")
 	siteID := installSet.Int("site-id", 0, "Site ID")
 	token := installSet.String("auth", "", "Agent's authorization token")
-	timeout := installSet.Duration("timeout", 1000, "Installer timeout in seconds")
+	timeout := installSet.Duration("timeout", 30*time.Second, "Installer timeout in seconds")
 	aDesc := installSet.String("desc", hostname, "Agent's description to display on the RMM server")
 	cert := installSet.String("cert", "", "Path to the Root Certificate Authority's .pem")
 
 	// Update
-	updateSet := flag.NewFlagSet("update", flag.ContinueOnError)
+	updateSet := flag.NewFlagSet("update", flag.ExitOnError)
 	updateUrl := updateSet.String("updateurl", "", "Source URL to retrieve the update executable")
 	inno := updateSet.String("inno", "", "Setup filename") // todo: Windows only
 	updateVer := updateSet.String("updatever", "", "Update version")
 
-	modeSet := flag.NewFlagSet("mode", flag.ContinueOnError)
+	// Mode (legacy)
+	modeSet := flag.NewFlagSet("mode", flag.ExitOnError)
 	mode := modeSet.String("m", "", "The mode to run: "+
-		"install, update, agentsvc, runchecks, checkrunner, sysinfo, software, \n\t\tsync, pk, publicip, taskrunner, cleanup")
+		"install, update, agentsvc, runchecks, checkrunner, sysinfo, software, sync, pk, publicip, taskrunner, cleanup")
 
+	// Task
+	// taskSet := flag.NewFlagSet("task", flag.ContinueOnError)
+
+	// Task ID
 	taskPK := flag.Int("p", 0, "Task PK")
 
 	// Logging
@@ -76,16 +83,19 @@ func main() {
 	logTo := flag.String("logto", "file", "Log destination: file, stdout")
 
 	// Agent Service management
+	// serviceSet := flag.NewFlagSet("service", flag.ExitOnError)
 	svcFlag := flag.String("service", "", "Control the system service.")
 
-	// flag.Parse()
+	flag.Parse()
+
+	// todo: Cobra: https://github.com/spf13/cobra/blob/main/site/content/user_guide.md
+	// cmd.Execute()
 
 	// info, ok := debug.ReadBuildInfo()
 	// if !ok {
 	// 	fmt.Fprintln(os.Stderr, "build information not found")
 	// 	return
 	// }
-
 	// if *ver {
 	// 	printVersionInfo(info)
 	// 	return
@@ -99,21 +109,21 @@ func main() {
 	setupLogging(logLevel, logTo)
 	defer logFile.Close()
 
-	// fmt.Println(checkForAdmin())
-
 	var isAdmin = checkForAdmin()
 	if !isAdmin {
 		fmt.Println("Need to run using administrative privileges")
 	}
 
 	// was: var a = NewAgent(log, version).(agent.IAgent)
-	var a = NewAgent(log, version, isAdmin) // .(agent.IAgent)
-	// test: var a, _ = GetAgent(log, version)
+	var a = NewAgent(log, version, isAdmin)
+	// test: AgentProvider:
+	// var a, _ = GetAgent(log, version, isAdmin)
 
 	if len(os.Args) == 1 {
 		a.ShowStatus(version)
 		fmt.Fprintln(os.Stderr, "didn't receive any arguments")
 		// show usage info
+		flag.Usage()
 		os.Exit(0)
 		return
 	}
@@ -140,7 +150,8 @@ func main() {
 		}
 
 	case "service":
-		fmt.Fprintln(os.Stderr, "case => service")
+		// fmt.Fprintln(os.Stderr, "case => service")
+		// serviceSet.PrintDefaults()
 		err := service.Control(s, *svcFlag)
 		if err != nil {
 			log.Printf("Valid actions: %q\n", service.ControlAction)
@@ -168,7 +179,10 @@ func main() {
 	// case AGENT_RPC:
 	// 	a.RunService()
 	case AGENT_MODE_RPC, AGENT_MODE_SVC:
-		s.Run()
+		err := s.Run()
+		if err != nil {
+			log.Error(err)
+		}
 		// a.RunService()
 		// a.RunAgentService()
 	case AGENT_MODE_RUNCHECKS:
@@ -190,6 +204,7 @@ func main() {
 			return
 		}
 		a.RunTask(*taskPK)
+
 	// todo:
 	// case AGENT_MODE_SHOW_PK:
 	// 	fmt.Println(a.AgentPK)
@@ -228,12 +243,12 @@ func main() {
 	}
 }
 
-/*func GetAgent(logger *logrus.Logger, version string) (*agent.Agent, error) {
-	provider := registry2.GetAgentProvider()
+/*func GetAgent(logger *logrus.Logger, version string, isAdmin bool) (agent.IAgent, error) {
+	provider := agent.GetAgentProvider()
 	if provider == nil {
 		return nil, fmt.Errorf("Unimplemented")
 	}
-	return provider.Agent(logger, version), nil
+	return provider.Host(logger, version, isAdmin), nil
 }*/
 
 func checkForAdmin() bool {
@@ -264,7 +279,17 @@ func setupLogging(level, to *string) {
 	} else {
 		switch runtime.GOOS {
 		case "windows":
-			logFile, _ = os.OpenFile(filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER, AGENT_LOG_FILE), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+			_, err = os.Stat(filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER))
+			if os.IsNotExist(err) {
+				err := os.Mkdir(filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER), 0700)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to create agent directory: %s\n", err)
+				}
+			}
+			logFile, err = os.OpenFile(filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER, AGENT_LOG_FILE), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to open log file: %s\n", err)
+			}
 		case "freebsd":
 			logFile, _ = os.OpenFile(filepath.Join("/var/log", "rmm", AGENT_LOG_FILE), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0660)
 		case "darwin":
@@ -298,7 +323,7 @@ func updateUsage() {
 // showVersionInfo prints basic debugging info
 func showVersionInfo(ver string) {
 	fmt.Println(agent.AGENT_NAME_LONG, ver, runtime.GOARCH, runtime.Version())
-	// if runtime.GOOS == "windows" {
-	// 	fmt.Println("Program Directory: ", filepath.Join(os.Getenv("ProgramFiles"), agent.AGENT_FOLDER))
-	// }
+	if runtime.GOOS == "windows" {
+		fmt.Println("Program Directory: ", filepath.Join(os.Getenv("ProgramFiles"), AGENT_FOLDER))
+	}
 }

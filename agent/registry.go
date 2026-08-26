@@ -10,7 +10,7 @@ var (
 )
 
 type AgentProvider interface {
-	Agent(logger *logrus.Logger, version string) *IAgent
+	Host(logger *logrus.Logger, version string, isAdmin bool) IAgent
 }
 
 func Register(provider interface{}) {
