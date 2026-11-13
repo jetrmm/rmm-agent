@@ -7,6 +7,10 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+func init() {
+	agent.Register(freebsdAgent{})
+}
+
 type freebsdAgent struct {
 	agent.Agent
 }

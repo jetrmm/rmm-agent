@@ -10,7 +10,7 @@ type InstallInfo struct {
 	SiteID      int           // Client Site ID
 	Description string        // Defaults to hostname
 	Token       string        // Authorization token (password)
-	RootCert    string        // Trusted Root Certificate
+	RootCert    string        // Trusted Root Certificate (path + filename)
 	Timeout     time.Duration // Installation timeout
 	Silent      bool          // Silent installation
 	// AgentType   string // Workstation, Server

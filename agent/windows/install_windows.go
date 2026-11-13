@@ -6,9 +6,11 @@ import (
 	"github.com/jetrmm/rmm-agent/agent"
 	"github.com/kardianos/service"
 	"github.com/sirupsen/logrus"
+	windows2 "golang.org/x/sys/windows"
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -31,6 +33,7 @@ type WinRegKeys struct {
 	rootCert string
 }
 
+// Install the Agent
 func (a *windowsAgent) Install(i *agent.InstallInfo, agentID string) {
 	a.checkExistingAndRemove(i.Silent)
 
@@ -65,7 +68,7 @@ func (a *windowsAgent) Install(i *agent.InstallInfo, agentID string) {
 	a.Logger.Debugln("Agent API Endpoint:", i.ApiURL)
 
 	// todo: port 443 and/or 4222
-	terr := agent.TestTCP(fmt.Sprintf("%s:4222", i.ApiURL))
+	terr := agent.TestTCP(fmt.Sprintf("%s:%s", i.ApiURL, agent.NATS_DEFAULT_PORT))
 	if terr != nil {
 		a.installerMsg(fmt.Sprintf("ERROR: Either port %s TCP is not open on your RMM server, or the NATS service is not running.\n\n%s",
 			agent.NATS_DEFAULT_PORT, terr.Error()), "error", i.Silent)
@@ -144,9 +147,8 @@ func (a *windowsAgent) Install(i *agent.InstallInfo, agentID string) {
 	createRegKeys(baseURL, a.AgentID, i.ApiURL, authToken, strconv.Itoa(agentPK), i.RootCert)
 
 	// Refresh our agent with new values
-	a = a.New(a.Logger, a.Version, true)
-	// todo:
-	// a = NewAgent(a.Logger, a.Version)
+	// was: a = a.New(a.Logger, a.Version, true)
+	a = NewAgent(a.Logger, a.Version, true)
 
 	// Set new headers. No longer knox auth; use agent auth
 	rClient.SetHeaders(a.Headers)
@@ -342,5 +344,109 @@ func (a *windowsAgent) installerMsg(msg, alert string, silent bool) {
 
 	if alert == "error" {
 		a.Logger.Fatalln(msg)
+	}
+}
+
+func (a *windowsAgent) UninstallCleanup() {
+	err := registry.DeleteKey(registry.LOCAL_MACHINE, REG_RMM_PATH)
+	if err != nil {
+		return
+	}
+	a.CleanupAgentUpdates()
+	CleanupSchedTasks()
+}
+
+func (a *windowsAgent) AgentUpdate(url, inno, version string) {
+	time.Sleep(time.Duration(randRange(1, 15)) * time.Second)
+
+	a.CleanupAgentUpdates()
+
+	updater := filepath.Join(a.GetWorkingDir(), inno)
+	a.Logger.Infof("Agent updating from %s to %s", a.Version, version)
+	a.Logger.Infoln("Downloading agent update from", url)
+
+	rClient := resty.New()
+	rClient.SetCloseConnection(true)
+	rClient.SetTimeout(15 * time.Minute)
+	rClient.SetDebug(a.Debug)
+	r, err := rClient.R().SetOutput(updater).Get(url)
+	if err != nil {
+		a.Logger.Errorln(err)
+		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
+		return
+	}
+	if r.IsError() {
+		a.Logger.Errorln("Download failed with status code", r.StatusCode())
+		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
+		return
+	}
+
+	dir, err := os.MkdirTemp("", INNO_SETUP_DIR)
+	if err != nil {
+		a.Logger.Errorln("AgentUpdate unable to create temporary directory:", err)
+		runExe("net", []string{"start", SERVICE_NAME_AGENT}, 10, false)
+		return
+	}
+
+	innoLogFile := filepath.Join(dir, INNO_SETUP_LOGFILE)
+
+	args := []string{"/C", updater, "/VERYSILENT", fmt.Sprintf("/LOG=%s", innoLogFile)}
+	cmd := exec.Command("cmd.exe", args...)
+	cmd.SysProcAttr = &windows2.SysProcAttr{
+		CreationFlags: windows2.DETACHED_PROCESS | windows2.CREATE_NEW_PROCESS_GROUP,
+	}
+	cmd.Start()
+	time.Sleep(1 * time.Second)
+}
+
+func (a *windowsAgent) GetUninstallExe() string {
+	cderr := os.Chdir(a.GetWorkingDir())
+	if cderr == nil {
+		files, err := filepath.Glob("unins*.exe")
+		if err == nil {
+			for _, f := range files {
+				if strings.Contains(f, "001") {
+					return f
+				}
+			}
+		}
+	}
+	return "unins000.exe"
+}
+
+func (a *windowsAgent) AgentUninstall() {
+	agentUninst := filepath.Join(a.GetWorkingDir(), a.GetUninstallExe())
+	args := []string{"/C", agentUninst, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/FORCECLOSEAPPLICATIONS"}
+	cmd := exec.Command("cmd.exe", args...)
+	cmd.SysProcAttr = &windows2.SysProcAttr{
+		CreationFlags: windows2.DETACHED_PROCESS | windows2.CREATE_NEW_PROCESS_GROUP,
+	}
+	cmd.Start()
+}
+
+func (a *windowsAgent) CleanupAgentUpdates() {
+	cderr := os.Chdir(a.GetWorkingDir())
+	if cderr != nil {
+		a.Logger.Errorln(cderr)
+		return
+	}
+
+	files, err := filepath.Glob("winagent-v*.exe")
+	if err == nil {
+		for _, f := range files {
+			os.Remove(f)
+		}
+	}
+
+	cderr = os.Chdir(os.Getenv("TMP"))
+	if cderr != nil {
+		a.Logger.Errorln(cderr)
+		return
+	}
+	folders, err := filepath.Glob(RMM_SEARCH_PREFIX)
+	if err == nil {
+		for _, f := range folders {
+			os.RemoveAll(f)
+		}
 	}
 }
