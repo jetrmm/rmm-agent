@@ -1,6 +1,6 @@
 module github.com/jetrmm/rmm-agent
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/go-ole/go-ole v1.3.0
@@ -19,7 +19,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/ugorji/go/codec v1.2.12
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
