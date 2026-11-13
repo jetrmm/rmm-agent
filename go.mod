@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/go-ole/go-ole v1.3.0
-	github.com/go-resty/resty/v2 v2.17.1
+	github.com/go-resty/resty/v2 v2.17.2
 	github.com/gonutz/w32/v2 v2.12.1
 	github.com/jetrmm/go-dpapi v0.1.0
 	github.com/jetrmm/go-sysinfo v0.1.1
