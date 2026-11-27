@@ -14,7 +14,7 @@ require (
 	github.com/jetrmm/go-wmi v0.1.0
 	github.com/jetrmm/rmm-shared v0.0.0-20231026210319-d19a6850ab00
 	github.com/kardianos/service v1.3.0
-	github.com/nats-io/nats.go v1.39.1
+	github.com/nats-io/nats.go v1.56.0
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.10.2
@@ -27,9 +27,9 @@ require (
 	github.com/google/cabbie v1.0.5 // indirect
 	github.com/google/glazier v0.0.0-20230912201418-e61e8c721b6f // indirect
 	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901 // indirect
-	github.com/klauspost/compress v1.18.7 // indirect
+	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20231016141302-07b5767bb0ed // indirect
-	github.com/nats-io/nkeys v0.4.9 // indirect
+	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -42,8 +42,8 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
 	howett.net/plist v1.0.1 // indirect
 )
